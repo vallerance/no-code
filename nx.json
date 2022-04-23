@@ -1,7 +1,11 @@
 {
   "npmScope": "no-code",
   "affected": {
-    "defaultBase": "main"
+    "defaultBase": "master"
+  },
+  "workspaceLayout": {
+    "appsDir": "packages",
+    "libsDir": "packages"
   },
   "cli": {
     "defaultCollection": "@nrwl/react"
