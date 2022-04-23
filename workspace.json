@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "projects": {
+    "api": "apps/api",
+    "api-interfaces": "libs/api-interfaces",
+    "explorer": "apps/explorer",
+    "explorer-e2e": "apps/explorer-e2e"
+  }
+}
