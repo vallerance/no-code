@@ -6,12 +6,14 @@
     "start": "nx serve",
     "build": "nx build",
     "test": "nx test",
-    "nx": "nx"
+    "nx": "nx",
+    "node-red": "node-red"
   },
   "private": true,
   "dependencies": {
     "core-js": "^3.6.5",
     "express": "4.17.2",
+    "node-red": "^2.2.2",
     "react": "18.0.0",
     "react-dom": "18.0.0",
     "react-is": "18.0.0",
