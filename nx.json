@@ -21,12 +21,7 @@
     "default": {
       "runner": "@nrwl/nx-cloud",
       "options": {
-        "cacheableOperations": [
-          "build",
-          "lint",
-          "test",
-          "e2e"
-        ],
+        "cacheableOperations": ["build", "lint", "test", "e2e"],
         "accessToken": "ZWNmZDFlOTQtMGRlMC00ZTMyLThhYmItMDVjMjhiYjAzNDNlfHJlYWQtd3JpdGU="
       }
     }
@@ -53,7 +48,17 @@
         "style": "styled-components",
         "linter": "eslint"
       }
+    },
+    "@nrwl/web:application": {
+      "style": "css",
+      "linter": "eslint",
+      "unitTestRunner": "jest",
+      "e2eTestRunner": "none"
+    },
+    "@nrwl/web:library": {
+      "style": "css",
+      "linter": "eslint",
+      "unitTestRunner": "jest"
     }
-  },
-  "defaultProject": "explorer"
+  }
 }
