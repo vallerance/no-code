@@ -1,0 +1,200 @@
+html {
+    background-image: url('/assets/images/lightpaperfibers.png');
+    background-repeat: repeat;
+    margin: 0 1em;
+}
+
+body {
+    background-color: transparent;
+    color: black;
+}
+
+header {
+    padding: 20px;
+    margin-top: 50px;
+    font-weight: 400;
+}
+
+#addfeatures {
+    clear: both;
+    padding: 0px;
+    margin-top: 30px;
+}
+
+header h1 {
+    font-weight: 400;
+    font-size: 4em;
+}
+
+.hero-unit {
+    padding: 30px;
+}
+
+ul {
+    margin: 0 0 0 1em;
+}
+
+#usedFeatures ul li,
+ul#free li,
+#features li {
+    list-style: none;
+    float: left;
+    color: white;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
+}
+
+#usedFeatures ul li label,
+ul#free li label,
+ul#features li label {
+    padding: 5px;
+    margin: 5px;
+    cursor: pointer;
+    -webkit-transition: all 0.2s ease-in-out;
+    transition: all 0.2s ease-in-out;
+}
+
+#usedFeatures {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+#usedFeatures ul {
+    display: inline-block;
+    margin-left: 1ch;
+}
+
+#usedFeatures ul li label {
+    background-color: hsl(200, 100%, 42%);
+    outline: none;
+    color: white !important;
+}
+
+#usedFeatures ul li input[type='checkbox'],
+ul#free li input[type='checkbox'],
+ul#features input[type='checkbox'] {
+    display: none;
+}
+
+input[type='checkbox']:checked + label {
+    background-color: hsl(200, 100%, 42%) !important;
+    box-shadow: inset 0px 0px 3px black;
+}
+
+thead {
+    text-transform: capitalize;
+}
+
+td {
+    padding: 5px;
+}
+
+td.versions {
+    word-break: break-all;
+}
+
+h2,
+h3 {
+    clear: both;
+}
+
+input[type='search'] {
+    font-size: 3em;
+    width: 100%;
+    height: 1.2em;
+    line-height: 1.2em;
+    box-sizing: border-box;
+}
+
+#share {
+    color: hsla(90, 100%, 42%, 1);
+}
+
+#mobileDesktopSplit {
+    float: left;
+}
+
+#totalShare {
+    float: left;
+}
+
+@media all and (max-width: 650px) {
+    /*  Mobile */
+    html {
+        background-color: white;
+        margin: 0 5px 0 5px;
+    }
+
+    #addfeatures {
+        display: none;
+    }
+
+    input[type='search'] {
+        font-size: 4em;
+        line-height: 1em;
+        display: none;
+        /* until I sort out data lists */
+    }
+
+    ul {
+        -webkit-column-count: 2;
+        -moz-column-count: 2;
+        column-count: 2;
+    }
+
+    #usedFeatures ul {
+        display: block;
+        -webkit-column-count: 0;
+        -moz-column-count: 0;
+        column-count: 0;
+    }
+
+    ul li {
+        width: 100%;
+    }
+
+    ul li label {
+        padding: 10px;
+        font-size: 18px;
+        word-break: break-all;
+    }
+
+    #mobileDesktopSplit {
+        float: none;
+    }
+
+    #totalShare {
+        float: none;
+    }
+
+    table {
+        margin: auto;
+    }
+
+    svg {
+        margin: auto;
+    }
+
+    #mobileDesktopSplitChart {
+        float: none;
+        margin: auto;
+        text-align: center;
+    }
+
+    #totalShareChart {
+        float: none;
+        margin: auto;
+        text-align: center;
+    }
+}
+
+#charts.all .all {
+    display: block;
+}
+
+#charts.desktop .all {
+    display: none;
+}
+
+#charts.mobile .all {
+    display: none;
+}

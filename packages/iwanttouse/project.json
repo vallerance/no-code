@@ -1,0 +1,71 @@
+{
+  "projectType": "application",
+  "root": "packages/iwanttouse",
+  "sourceRoot": "packages/iwanttouse/src",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nrwl/web:webpack",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/packages/iwanttouse",
+        "compiler": "babel",
+        "index": "packages/iwanttouse/src/index.html",
+        "baseHref": "/",
+        "main": "packages/iwanttouse/src/main.ts",
+        "polyfills": "packages/iwanttouse/src/polyfills.ts",
+        "tsConfig": "packages/iwanttouse/tsconfig.app.json",
+        "assets": [
+          "packages/iwanttouse/src/favicon.ico",
+          "packages/iwanttouse/src/assets"
+        ],
+        "styles": ["packages/iwanttouse/src/styles.css"],
+        "scripts": []
+      },
+      "configurations": {
+        "production": {
+          "fileReplacements": [
+            {
+              "replace": "packages/iwanttouse/src/environments/environment.ts",
+              "with": "packages/iwanttouse/src/environments/environment.prod.ts"
+            }
+          ],
+          "optimization": true,
+          "outputHashing": "all",
+          "sourceMap": false,
+          "namedChunks": false,
+          "extractLicenses": true,
+          "vendorChunk": false
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nrwl/web:dev-server",
+      "options": {
+        "buildTarget": "iwanttouse:build",
+        "port": 4211
+      },
+      "configurations": {
+        "production": {
+          "buildTarget": "iwanttouse:build:production"
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nrwl/linter:eslint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["packages/iwanttouse/**/*.ts"]
+      }
+    },
+    "test": {
+      "executor": "@nrwl/jest:jest",
+      "outputs": ["coverage/packages/iwanttouse"],
+      "options": {
+        "jestConfig": "packages/iwanttouse/jest.config.js",
+        "passWithNoTests": true
+      }
+    }
+  }
+}

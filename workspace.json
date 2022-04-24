@@ -3,6 +3,7 @@
   "projects": {
     "api": "packages/api",
     "api-interfaces": "packages/api-interfaces",
-    "explorer": "packages/explorer"
+    "explorer": "packages/explorer",
+    "iwanttouse": "packages/iwanttouse"
   }
 }
