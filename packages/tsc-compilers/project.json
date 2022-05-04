@@ -1,0 +1,52 @@
+{
+  "root": "packages/tsc-compilers",
+  "sourceRoot": "packages/tsc-compilers/src",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "@nrwl/node:webpack",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/packages/tsc-compilers",
+        "main": "packages/tsc-compilers/src/main.ts",
+        "tsConfig": "packages/tsc-compilers/tsconfig.app.json",
+        "assets": ["packages/tsc-compilers/src/assets"]
+      },
+      "configurations": {
+        "production": {
+          "optimization": true,
+          "extractLicenses": true,
+          "inspect": false,
+          "fileReplacements": [
+            {
+              "replace": "packages/tsc-compilers/src/environments/environment.ts",
+              "with": "packages/tsc-compilers/src/environments/environment.prod.ts"
+            }
+          ]
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nrwl/node:node",
+      "options": {
+        "buildTarget": "tsc-compilers:build"
+      }
+    },
+    "lint": {
+      "executor": "@nrwl/linter:eslint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["packages/tsc-compilers/**/*.ts"]
+      }
+    },
+    "test": {
+      "executor": "@nrwl/jest:jest",
+      "outputs": ["coverage/packages/tsc-compilers"],
+      "options": {
+        "jestConfig": "packages/tsc-compilers/jest.config.js",
+        "passWithNoTests": true
+      }
+    }
+  },
+  "tags": []
+}

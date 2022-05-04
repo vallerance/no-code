@@ -4,6 +4,7 @@
     "api": "packages/api",
     "api-interfaces": "packages/api-interfaces",
     "explorer": "packages/explorer",
-    "iwanttouse": "packages/iwanttouse"
+    "iwanttouse": "packages/iwanttouse",
+    "tsc-compilers": "packages/tsc-compilers"
   }
 }
