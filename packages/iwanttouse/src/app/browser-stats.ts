@@ -220,3 +220,5 @@ export class BrowserStats {
             });
     }
 }
+
+export default BrowserStats;

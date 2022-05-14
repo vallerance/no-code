@@ -1,9 +1,50 @@
 import $ from 'jquery';
 import * as d3 from 'd3';
+import { OutputTo } from '@no-code/orb-flow';
 
 import './app.element.css';
 import { BrowserStats } from './browser-stats';
 
+export * from './browser-stats';
+export * as bsa from './browser-stats';
+export { BrowserStats as ab2 } from './browser-stats';
+export { default as abd } from './browser-stats';
+
+export const a = 1;
+
+export const abf = () => {
+        /*empty*/
+    },
+    aaad = function () {
+        /*empty*/
+    };
+
+export function c() {
+    /*empty*/
+}
+
+export { OutputTo };
+
+const _test1 = a
+    ? null
+    : function () {
+          /*empty*/
+      };
+(() => {
+    /*empty*/
+})();
+
+const b = 2;
+
+export { b, a as d };
+
+//export * as all;
+
+export default b;
+
+//export = b
+
+OutputTo();
 export class AppElement extends HTMLElement {
     public static observedAttributes = [];
 
