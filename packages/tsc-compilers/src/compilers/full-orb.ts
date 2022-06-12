@@ -6,8 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { createProgram, ProgramSpec } from '../lib/bootstrap';
 import {
     CompiledDefinitions,
+    DeclaredDefinition,
     FunctionDefinition,
     ParsedDefinition,
+    SyntheticDefinition,
 } from '../lib/compiler';
 import { report } from '../lib/log';
 import { mapModuleToSourceFile } from '../lib/module';
@@ -112,11 +114,11 @@ const getVariableDeclarationFunctionExpression = (
         .find(isFunctionExpression) as FunctionExpression;
 };
 
-const createDefinitionKey = (declaration: ts.Declaration): string =>
-    `${declaration
+const createDefinitionKey = (definition: ts.Node): string =>
+    `${definition
         .getSourceFile()
         .fileName.replaceAll(/[^A-Za-z0-9]/g, '-')
-        .toLowerCase()}-${declaration.pos}`;
+        .toLowerCase()}-${definition.pos}`;
 
 enum PARSE_STATUS {
     PENDING,
@@ -125,7 +127,7 @@ enum PARSE_STATUS {
     SKIPPED,
 }
 
-type ExportedDefinitions = Record<string, ParsedDefinition>;
+type ExportedDefinitions = Record<string, DeclaredDefinition>;
 
 type ParsedSourceFile = {
     sourceFile: ts.SourceFile;
@@ -138,7 +140,8 @@ type NamedDeclarations = Record<string, ts.Declaration>;
 class Program {
     private programSpec: ProgramSpec;
     private sourceFiles: Record<string, ParsedSourceFile> = {};
-    private functionDefinitions: CompiledDefinitions = {};
+    private functionDefinitions: CompiledDefinitions<DeclaredDefinition> = {};
+    private syntheticDefinitions: CompiledDefinitions<SyntheticDefinition> = {};
 
     constructor(argv: string[], tsConfigName: string) {
         this.programSpec = createProgram(argv, tsConfigName);
@@ -148,6 +151,37 @@ class Program {
         this.programSpec.program
             .getSourceFiles()
             .forEach(this.parseSourceFile.bind(this));
+    }
+
+    private getNodeDeclaration(node: ts.Node): ts.Declaration | null {
+        // search for a symbold for our node
+        let symbol: ts.Symbol | undefined = undefined;
+        // first, try getSymbolAtLocation()
+        const typeChecker = this.programSpec.program.getTypeChecker();
+        symbol = typeChecker.getSymbolAtLocation(node);
+        // if we don't have a symbol yet
+        if (!symbol) {
+            // try getTypeAtLocation()
+            symbol = typeChecker.getTypeAtLocation(node).symbol;
+        }
+        // search for a declaration for our identifier
+        const declaration = symbol?.declarations?.[0];
+        // if we couldn't find one
+        if (!declaration) {
+            // there is nothing for us to do with this call expression
+            report(
+                node,
+                `No declaration for node \`${
+                    node.getText().split('\n')[0]
+                }\` found.`
+            );
+            return null;
+        }
+        report(
+            declaration,
+            `Found declaration for node \`${node.getText().split('\n')[0]}\`.`
+        );
+        return declaration;
     }
 
     private handleDeclarationSourceFile(
@@ -171,7 +205,7 @@ class Program {
         return sourceFileState;
     }
 
-    resolveDeclaration(declaration: ts.Declaration): ParsedDefinition | null {
+    resolveDeclaration(declaration: ts.Declaration): DeclaredDefinition | null {
         // handle the source file
         const sourceFile = declaration.getSourceFile();
         const sourceFileState = this.handleDeclarationSourceFile(sourceFile);
@@ -254,27 +288,21 @@ class Program {
 
         // now, if this isn't a declaration that CallExpressions will reference
         if (isFunctionExpression(declaration)) {
-            // then we'll need to find a declaration that calls will reference
+            // attempt to find a declaration that calls will reference
             // for now, we'll just search for VariableDeclarations
             let node = declaration as ts.Node;
             while (node != sourceFile) {
+                // if we run across a call expression
+                if (node.kind === ts.SyntaxKind.CallExpression) {
+                    // there is no variable declaration to find
+                    break;
+                }
                 if (node.kind === ts.SyntaxKind.VariableDeclaration) {
                     // we've found our variable declaration, reassign declaration to it
                     declaration = node as ts.VariableDeclaration;
                     break;
                 }
                 node = node.parent;
-            }
-            // if we couldn't find our declaration
-            if (node === sourceFile) {
-                // then we have nothing to return
-                report(
-                    declaration,
-                    `Unable to find suitable declaration for ${
-                        ts.SyntaxKind[declaration.kind]
-                    }`
-                );
-                return null;
             }
         }
 
@@ -297,7 +325,50 @@ class Program {
         return this.functionDefinitions[key];
     }
 
-    resolveCallExpression(
+    resolveCallExpressionCallbacks(
+        callExpression: ts.CallExpression
+    ): DeclaredDefinition[] {
+        // first, get our calls arguments
+        return (
+            callExpression.arguments
+                // map them to resolved definitions
+                .map(arg => {
+                    // search for a declaration for this arg
+                    const declaration = this.getNodeDeclaration(arg);
+                    // if we couldn't find one
+                    if (!declaration) {
+                        // this arg is not a callback
+                        return null;
+                    }
+                    // else, this could be a callback, parse the declaration
+                    switch (declaration.kind) {
+                        case ts.SyntaxKind.VariableDeclaration:
+                        case ts.SyntaxKind.FunctionDeclaration:
+                        case ts.SyntaxKind.FunctionExpression:
+                        case ts.SyntaxKind.ArrowFunction:
+                        case ts.SyntaxKind.MethodDeclaration: {
+                            // attempt to resolve this declaration
+                            let resolved: DeclaredDefinition | null = null;
+                            try {
+                                resolved = this.resolveDeclaration(declaration);
+                            } catch (e) {
+                                // ignore errors
+                            }
+                            // if we were successful, return the resolved declaration
+                            // else, an error should have already been reported
+                            return resolved;
+                        }
+                        default: {
+                            return null;
+                        }
+                    }
+                })
+                // filter out failed mappings
+                .filter(it => it !== null) as DeclaredDefinition[]
+        );
+    }
+
+    resolveCallExpressionDeclaration(
         callExpression: ts.CallExpression
     ): ParsedDefinition | null {
         // get the identifier that is being called
@@ -308,22 +379,12 @@ class Program {
             return null;
         }
         // search for a declaration for our identifier
-        const typeChecker = this.programSpec.program.getTypeChecker();
-        const declaration =
-            typeChecker.getSymbolAtLocation(identifier)?.declarations?.[0];
+        const declaration = this.getNodeDeclaration(identifier);
         // if we couldn't find one
         if (!declaration) {
-            // there is nothing for us to do with this call expression
-            report(
-                callExpression,
-                `No declaration for identifier \`${identifier.getText()}\` found.`
-            );
+            // an error should have already been reported
             return null;
         }
-        report(
-            declaration,
-            `Found declaration for identifier \`${identifier.getText()}\`.`
-        );
         // attempt to resolve our declaration
         // if we were unable to, there is likely a good reason for this, no
         // need to report
@@ -472,7 +533,7 @@ class Program {
         (function parseNode(
             this: Program,
             node: ts.Node,
-            currentDefinition: ParsedDefinition | null = null
+            currentDefinition: DeclaredDefinition | null = null
         ) {
             switch (node.kind) {
                 case ts.SyntaxKind.CallExpression: {
@@ -482,20 +543,44 @@ class Program {
                         // definitions for now
                         break;
                     }
-                    // attempt to resolve our declaration
+                    // else, continue to parse this call expression
                     const callExpression = node as ts.CallExpression;
+                    // first check and see if we're passing any function arguments
+                    const resolvedCallbackArguments =
+                        this.resolveCallExpressionCallbacks(callExpression);
+                    // now, attempt to resolve our declaration
                     const resolvedDeclaration =
-                        this.resolveCallExpression(callExpression);
-                    // if we were unable to
-                    if (!resolvedDeclaration) {
-                        // errors should have already been reported
+                        this.resolveCallExpressionDeclaration(callExpression);
+                    // if we were able to
+                    if (resolvedDeclaration) {
+                        // add our callback arguments
+                        resolvedDeclaration.callbacks =
+                            resolvedCallbackArguments;
+                        // add our call to our current definition
+                        currentDefinition.calls.push({
+                            callExpression,
+                            functionDefinition: resolvedDeclaration,
+                        });
+                        // we're done
                         break;
                     }
-                    // add our call to our current definition
-                    currentDefinition.calls.push({
-                        callExpression,
-                        functionDefinition: resolvedDeclaration,
-                    });
+                    // errors should have already been reported
+                    // else, if we were passed callbacks
+                    if (resolvedCallbackArguments.length) {
+                        // create a synthetic function for this call expression
+                        const key = createDefinitionKey(callExpression);
+                        this.syntheticDefinitions[key] = {
+                            id: uuidv4(),
+                            key,
+                            nodes: [callExpression],
+                            callbacks: resolvedCallbackArguments,
+                        };
+                        // add our synthetic definition as a call to our current definition
+                        currentDefinition.calls.push({
+                            callExpression,
+                            functionDefinition: this.syntheticDefinitions[key],
+                        });
+                    }
                     // we're done
                     break;
                 }
@@ -540,7 +625,11 @@ class Program {
     output(output: string, directory: string, name: string) {
         const outputName = Case.camel(output) as keyof typeof outputs;
 
-        outputs[outputName](this.functionDefinitions, directory, name);
+        outputs[outputName](
+            { ...this.functionDefinitions, ...this.syntheticDefinitions },
+            directory,
+            name
+        );
     }
 }
 

@@ -14,9 +14,18 @@ export type FunctionDefinition =
 export type ParsedDefinition = {
     id: string;
     key: string;
-    declaration: ts.NamedDeclaration;
-    definition: FunctionDefinition;
-    calls: ParsedCallExpression[];
+    callbacks?: ParsedDefinition[];
 };
 
-export type CompiledDefinitions = Record<string, ParsedDefinition>;
+export type DeclaredDefinition = ParsedDefinition & {
+    calls: ParsedCallExpression[];
+    declaration: ts.NamedDeclaration;
+    definition: FunctionDefinition;
+};
+
+export type SyntheticDefinition = ParsedDefinition & {
+    nodes: ts.Node[];
+};
+
+export type CompiledDefinitions<T extends ParsedDefinition = ParsedDefinition> =
+    Record<string, T>;
