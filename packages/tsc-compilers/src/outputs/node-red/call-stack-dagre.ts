@@ -2,7 +2,7 @@ import dagre from 'dagre';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
-import { CompiledDefinitions } from '../../lib/compiler';
+import { CompiledDefinitions, DeclaredDefinition } from '../../lib/compiler';
 
 export default (
     functionDefinitions: CompiledDefinitions,
@@ -16,7 +16,9 @@ export default (
         return {};
     });
     // build graph
-    for (const { key, calls } of Object.values(functionDefinitions)) {
+    for (const { key, calls } of Object.values(functionDefinitions).filter(
+        it => 'definition' in it
+    ) as DeclaredDefinition[]) {
         graph.setNode(key, {
             width: 20,
             height: 250,
@@ -39,8 +41,9 @@ export default (
             env: [],
         },
         ...graph.nodes().map(key => {
-            const { id, declaration, definition, calls } =
-                functionDefinitions[key];
+            const { id, declaration, definition, calls } = functionDefinitions[
+                key
+            ] as DeclaredDefinition;
             const { x, y } = graph.node(key);
             return {
                 id,

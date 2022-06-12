@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
-import { CompiledDefinitions } from '../../lib/compiler';
+import { CompiledDefinitions, DeclaredDefinition } from '../../lib/compiler';
 
 export default (
     functionDefinitions: CompiledDefinitions,
@@ -22,23 +22,25 @@ export default (
             info: '',
             env: [],
         },
-        ...Object.entries(functionDefinitions).map(
-            ([_, { id, declaration, definition, calls }]) => ({
-                id,
-                type: 'function',
-                z: flowId,
-                name: declaration.name?.getText() ?? '[[Anonymous function]]',
-                func: definition.getText(),
-                outputs: 1,
-                noerr: 0,
-                initialize: '',
-                finalize: '',
-                libs: [],
-                x: 160,
-                y: (yPos += 50),
-                wires: [calls.map(it => it.functionDefinition.id)],
-            })
-        ),
+        ...(
+            Object.entries(functionDefinitions).filter(
+                ([_, it]) => 'definition' in it
+            ) as [string, DeclaredDefinition][]
+        ).map(([_, { id, declaration, definition, calls }]) => ({
+            id,
+            type: 'function',
+            z: flowId,
+            name: declaration.name?.getText() ?? '[[Anonymous function]]',
+            func: definition.getText(),
+            outputs: 1,
+            noerr: 0,
+            initialize: '',
+            finalize: '',
+            libs: [],
+            x: 160,
+            y: (yPos += 50),
+            wires: [calls.map(it => it.functionDefinition.id)],
+        })),
     ];
     // output flow
     fs.writeFileSync(
