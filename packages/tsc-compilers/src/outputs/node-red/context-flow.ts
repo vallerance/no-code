@@ -267,7 +267,14 @@ export default (
                               func: text,
                               outputs: 1,
                               noerr: 0,
-                              initialize: '',
+                              initialize:
+                                  node.type === ParsedNodeType.CALL_EXPRESSION
+                                      ? (
+                                            node as ParsedCallExpression
+                                        ).callExpression.arguments
+                                            .map(it => getDefaultNodeName(it))
+                                            .join(', ')
+                                      : '',
                               finalize: '',
                               libs: [],
                           };
