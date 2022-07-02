@@ -6,8 +6,10 @@ import { CompiledDefinitions, ParsedDefinition } from '../../lib/compiler';
 import {
     calculatePosition,
     createLayoutGraph,
+    getBlockCalls,
     getNodeDimensions,
     getNodeParms,
+    indexDefinitionCallbacks,
     indexDefinitions,
 } from '../../lib/node-red';
 
@@ -27,11 +29,28 @@ export default (
 
     (function outputDefinitions(
         { name, parent }: FlowParams,
-        definitions: ParsedDefinition[]
+        definitions: ParsedDefinition[],
+        definitionCallbacks: Record<string, ParsedDefinition[]>
     ): string {
-        const definitionsByKey = indexDefinitions(definitions);
+        // const allDefinitions = [
+        //     ...definitions,
+        //     ...Object.values(definitionCallbacks).flat(),
+        // ];
+        const allDefinitions = definitions;
+        const definitionsByKey = indexDefinitions(
+            allDefinitions,
+            definitionCallbacks
+        );
+        const callbacksByDefinition = indexDefinitionCallbacks(
+            allDefinitions,
+            definitionCallbacks
+        );
 
-        const graph = createLayoutGraph(definitions, INPUT_KEY);
+        const graph = createLayoutGraph(
+            allDefinitions,
+            INPUT_KEY,
+            callbacksByDefinition
+        );
 
         const inputNode = graph.node(INPUT_KEY);
 
@@ -60,9 +79,10 @@ export default (
                 .nodes()
                 .filter(it => it !== INPUT_KEY)
                 .map(key => {
-                    const { name, text, calls } = getNodeParms(
+                    const { name, text, block } = getNodeParms(
                         definitionsByKey[key]
                     );
+                    const calls = getBlockCalls(block);
                     const node = graph.node(key);
                     const successors = graph.successors(
                         key
@@ -79,7 +99,9 @@ export default (
                         key
                     )?.[0] as unknown as string;
                     if (
-                        definitionsByKey[parentKey ?? '']?.callbacks?.find(
+                        definitionCallbacks[
+                            definitionsByKey[parentKey ?? '']?.key ?? ''
+                        ]?.find(
                             it =>
                                 it.key === key.split('-').slice(0, -1).join('-')
                         )
@@ -105,7 +127,13 @@ export default (
                                           name: base.name,
                                           parent: { name, parent },
                                       },
-                                      calls
+                                      calls.map(it => it.functionDefinition),
+                                      Object.fromEntries(
+                                          calls.map(call => [
+                                              call.functionDefinition.key,
+                                              call.callbacks ?? [],
+                                          ])
+                                      )
                                   ),
                           }
                         : {
@@ -127,7 +155,8 @@ export default (
             name,
             parent: { name: '[[Root]]', parent: null },
         },
-        Object.values(functionDefinitions)
+        Object.values(functionDefinitions),
+        {}
     );
     // output flow
     fs.writeFileSync(

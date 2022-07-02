@@ -1,13 +1,19 @@
 import dagre from 'dagre';
+import ts from 'typescript';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
     DeclaredDefinition,
+    ParsedBlock,
+    ParsedCallExpression,
     ParsedDefinition,
+    ParsedDefinitionType,
+    ParsedNodeType,
     SyntheticDefinition,
 } from './compiler';
+import { createNodeKey } from './source-file';
 
-const NODE_DIMENSIONS = {
+export const NODE_DIMENSIONS = {
     width: 200,
     height: 250,
 };
@@ -22,17 +28,28 @@ export const calculatePosition = ({
     y,
 });
 
+export const getBlockCalls = (block: ParsedBlock): ParsedCallExpression[] =>
+    block.parsedNodes.reduce<ParsedCallExpression[]>(
+        (calls, node) => [
+            ...calls,
+            ...(node.type === ParsedNodeType.CALL_EXPRESSION
+                ? [node as ParsedCallExpression]
+                : getBlockCalls(node as ParsedBlock)),
+        ],
+        []
+    );
+
 export const getNodeParms = (
     node: ParsedDefinition
-): { name: string; text: string; calls: ParsedDefinition[] } => {
-    if ('definition' in node) {
-        const { declaration, definition, calls } = node as DeclaredDefinition;
+): { name: string; text: string; block: ParsedBlock } => {
+    if (node.type === ParsedDefinitionType.DECLARED) {
+        const { declaration, definition, block } = node as DeclaredDefinition;
         return {
             name:
                 declaration.name?.getText() ??
                 '[[Anonymous function]] ' + uuidv4().split('-')[0],
             text: definition.getText(),
-            calls: calls.map(it => it.functionDefinition),
+            block,
         };
     } else {
         const { nodes } = node as SyntheticDefinition;
@@ -40,26 +57,69 @@ export const getNodeParms = (
             name:
                 nodes[0]?.getText().substring(0, 50) ??
                 '[[Empty Block]] ' + uuidv4().split('-')[0],
-            text: nodes.map(it => it.getText()).join(''),
-            calls: [],
+            text: nodes.map(it => it.getText()).join('\n'),
+            block: {
+                id: uuidv4(),
+                key: createNodeKey(nodes[0]),
+                type: ParsedNodeType.BLOCK,
+                parsedNodes: [],
+                blockNode: undefined as unknown as ts.Block,
+            },
         };
     }
 };
 
-export const indexDefinitions = (definitions: ParsedDefinition[]) =>
-    Object.fromEntries(
+export const indexDefinitions = (
+    definitions: ParsedDefinition[],
+    definitionCallbacks: Record<string, ParsedDefinition[]> = {}
+) => ({
+    ...Object.fromEntries(
+        Object.entries(definitionCallbacks).map(([_, callbacks]) =>
+            callbacks.map((cb, idx) => [cb.key + '-' + idx, cb]).flat()
+        )
+    ),
+    ...(Object.fromEntries(
         definitions
             .map((it, idx) => [
                 [it.key + '-' + idx, it],
-                ...(it.callbacks?.map((cb, idx) => [cb.key + '-' + idx, cb]) ??
-                    []),
+                ...(it.type === ParsedDefinitionType.DECLARED
+                    ? getBlockCalls((it as DeclaredDefinition).block)
+                          .map(call => call.callbacks ?? [])
+                          .flat()
+                          .map((cb, cbIdx) => [cb.key + '-' + cbIdx, cb])
+                    : []),
             ])
-            .flat(1)
-    ) as Record<string, ParsedDefinition>;
+            .flat()
+    ) as Record<string, ParsedDefinition>),
+});
+
+export const indexDefinitionCallbacks = (
+    definitions: ParsedDefinition[],
+    definitionCallbacks: Record<string, ParsedDefinition[]> = {}
+) => ({
+    ...definitionCallbacks,
+    ...(Object.fromEntries(
+        definitions
+            .map(def =>
+                def.type === ParsedDefinitionType.DECLARED
+                    ? getBlockCalls((def as DeclaredDefinition).block).map(
+                          call => [
+                              call.functionDefinition.key +
+                                  '-' +
+                                  definitions.indexOf(call.functionDefinition),
+                              call.callbacks ?? [],
+                          ]
+                      )
+                    : []
+            )
+            .flat()
+    ) as Record<string, ParsedDefinition[]>),
+});
 
 export const createLayoutGraph = (
     definitions: ParsedDefinition[],
-    firstNodeKey: string
+    firstNodeKey: string,
+    callbacksByDefinition: Record<string, ParsedDefinition[]> = {}
 ) => {
     const definitionsByKey = indexDefinitions(definitions);
     // Create a new directed graph
@@ -74,7 +134,8 @@ export const createLayoutGraph = (
     }
     // build graph
     for (let i = 0; i < definitions.length; i++) {
-        const { key, callbacks } = definitions[i];
+        const { key } = definitions[i];
+        const callbacks = callbacksByDefinition[key];
         graph.setNode(key + '-' + i, { ...NODE_DIMENSIONS });
         if (definitions[i + 1]) {
             graph.setEdge(

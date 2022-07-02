@@ -5,6 +5,7 @@ import { CompiledDefinitions, ParsedDefinition } from '../../lib/compiler';
 import {
     calculatePosition,
     createLayoutGraph,
+    getBlockCalls,
     getNodeParms,
     indexDefinitions,
 } from '../../lib/node-red';
@@ -59,9 +60,10 @@ export default (
                 .nodes()
                 .filter(it => it !== LINK_IN_KEY)
                 .map(key => {
-                    const { name, text, calls } = getNodeParms(
+                    const { name, text, block } = getNodeParms(
                         definitionsByKey[key]
                     );
+                    const calls = getBlockCalls(block);
                     const node = graph.node(key);
                     const successors = graph.successors(
                         key
@@ -84,7 +86,7 @@ export default (
                                           name: base.name,
                                           parent: { name, parent },
                                       },
-                                      calls
+                                      calls.map(it => it.functionDefinition)
                                   ),
                               ],
                               timeout: '30',

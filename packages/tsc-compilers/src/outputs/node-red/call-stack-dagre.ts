@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 import { CompiledDefinitions, DeclaredDefinition } from '../../lib/compiler';
+import { getBlockCalls } from '../../lib/node-red';
 
 export default (
     functionDefinitions: CompiledDefinitions,
@@ -16,7 +17,7 @@ export default (
         return {};
     });
     // build graph
-    for (const { key, calls } of Object.values(functionDefinitions).filter(
+    for (const { key, block } of Object.values(functionDefinitions).filter(
         it => 'definition' in it
     ) as DeclaredDefinition[]) {
         graph.setNode(key, {
@@ -24,7 +25,9 @@ export default (
             height: 250,
         });
 
-        calls.forEach(it => graph.setEdge(key, it.functionDefinition.key));
+        getBlockCalls(block).forEach(it =>
+            graph.setEdge(key, it.functionDefinition.key)
+        );
     }
     // calculate layout
     dagre.layout(graph);
@@ -41,7 +44,7 @@ export default (
             env: [],
         },
         ...graph.nodes().map(key => {
-            const { id, declaration, definition, calls } = functionDefinitions[
+            const { id, declaration, definition, block } = functionDefinitions[
                 key
             ] as DeclaredDefinition;
             const { x, y } = graph.node(key);
@@ -58,7 +61,7 @@ export default (
                 libs: [],
                 x: y,
                 y: x + 100,
-                wires: [calls.map(it => it.functionDefinition.id)],
+                wires: [getBlockCalls(block).map(it => it.id)],
             };
         }),
     ];

@@ -8,11 +8,16 @@ import {
     CompiledDefinitions,
     DeclaredDefinition,
     FunctionDefinition,
+    ParsedBlock,
+    ParsedCallExpression,
     ParsedDefinition,
+    ParsedDefinitionType,
+    ParsedNodeType,
     SyntheticDefinition,
 } from '../lib/compiler';
 import { report } from '../lib/log';
 import { mapModuleToSourceFile } from '../lib/module';
+import { createNodeKey } from '../lib/source-file';
 import * as outputs from '../outputs';
 
 const getCallExpressionIdentifier = (
@@ -114,12 +119,6 @@ const getVariableDeclarationFunctionExpression = (
         .find(isFunctionExpression) as FunctionExpression;
 };
 
-const createDefinitionKey = (definition: ts.Node): string =>
-    `${definition
-        .getSourceFile()
-        .fileName.replaceAll(/[^A-Za-z0-9]/g, '-')
-        .toLowerCase()}-${definition.pos}`;
-
 enum PARSE_STATUS {
     PENDING,
     PARSING,
@@ -153,7 +152,7 @@ class Program {
             .forEach(this.parseSourceFile.bind(this));
     }
 
-    private getNodeDeclaration(node: ts.Node): ts.Declaration | null {
+    private getNodeSymbol(node: ts.Node): ts.Symbol | undefined {
         // search for a symbold for our node
         let symbol: ts.Symbol | undefined = undefined;
         // first, try getSymbolAtLocation()
@@ -164,8 +163,12 @@ class Program {
             // try getTypeAtLocation()
             symbol = typeChecker.getTypeAtLocation(node).symbol;
         }
+        return symbol;
+    }
+
+    private getNodeDeclaration(node: ts.Node): ts.Declaration | null {
         // search for a declaration for our identifier
-        const declaration = symbol?.declarations?.[0];
+        const declaration = this.getNodeSymbol(node)?.declarations?.[0];
         // if we couldn't find one
         if (!declaration) {
             // there is nothing for us to do with this call expression
@@ -182,6 +185,51 @@ class Program {
             `Found declaration for node \`${node.getText().split('\n')[0]}\`.`
         );
         return declaration;
+    }
+
+    private getDefinitionBody(definition: FunctionDefinition): ts.Block | null {
+        // search for the body of our declaration
+        let body: ts.Block | ts.ConciseBody | undefined;
+        // first, see if it is defined already
+        body = definition.body;
+        // if it wasn't
+        if (!body) {
+            // try and get the body from a different declration
+            body = (
+                this.getNodeSymbol(definition)?.declarations?.find(
+                    it => 'body' in it
+                ) as ts.FunctionDeclaration | ts.MethodDeclaration
+            )?.body;
+        }
+        // if we still don't have the body
+        if (!body) {
+            // then give up
+            report(
+                definition,
+                `Fatal error: unable to find body for declaration`
+            );
+            return null;
+        }
+        // else, we have a body
+        // if it is an expression
+        if (body.kind !== ts.SyntaxKind.Block) {
+            // convert it into a block
+            const { pos, end, parent } = body;
+            body = ts.factory.createBlock([
+                ts.factory.createReturnStatement(body),
+            ]);
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            //@ts-ignore
+            body.pos = pos;
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            //@ts-ignore
+            body.end = end;
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            //@ts-ignore
+            body.parent = parent;
+        }
+        // by now, body should be a block
+        return body as ts.Block;
     }
 
     private handleDeclarationSourceFile(
@@ -218,7 +266,7 @@ class Program {
 
         // if we have a parsed declaration, return it
         const existingParsedDeclaration =
-            this.functionDefinitions[createDefinitionKey(declaration)];
+            this.functionDefinitions[createNodeKey(declaration)];
         if (existingParsedDeclaration) {
             return existingParsedDeclaration;
         }
@@ -286,6 +334,12 @@ class Program {
             );
         }
 
+        // we have a definition but it doesn't have a body, then it isn't actually a declartion we want to parse
+        const definitionBody = this.getDefinitionBody(definition);
+        if (!definitionBody) {
+            return null;
+        }
+
         // now, if this isn't a declaration that CallExpressions will reference
         if (isFunctionExpression(declaration)) {
             // attempt to find a declaration that calls will reference
@@ -312,13 +366,20 @@ class Program {
             `Creating function definition for ${ts.SyntaxKind[definition.kind]}`
         );
         // store it in state
-        const key = createDefinitionKey(declaration);
+        const key = createNodeKey(declaration);
         this.functionDefinitions[key] = {
+            type: ParsedDefinitionType.DECLARED,
             id: uuidv4(),
             key,
             declaration,
             definition,
-            calls: [],
+            block: {
+                id: uuidv4(),
+                key: createNodeKey(definitionBody),
+                type: ParsedNodeType.BLOCK,
+                blockNode: definitionBody,
+                parsedNodes: [],
+            },
         };
 
         // return the declaration we just created
@@ -529,12 +590,21 @@ class Program {
 
         report(sourceFile, 'Parsing source file.');
 
+        type ParseContext = {
+            definition: DeclaredDefinition | null;
+            block: ParsedBlock | null;
+            calls: ParsedCallExpression[];
+        };
+
         // iterate though our node tree and parse each node
         (function parseNode(
             this: Program,
             node: ts.Node,
-            currentDefinition: DeclaredDefinition | null = null
+            context: ParseContext
         ) {
+            let currentDefinition = context.definition;
+            let currentBlockNode: ts.Block | null = null;
+
             switch (node.kind) {
                 case ts.SyntaxKind.CallExpression: {
                     // if we don't have a current definition
@@ -551,35 +621,41 @@ class Program {
                     // now, attempt to resolve our declaration
                     const resolvedDeclaration =
                         this.resolveCallExpressionDeclaration(callExpression);
+                    // track if we have a valid call
+                    let definitionCall: ParsedDefinition | null = null;
                     // if we were able to
                     if (resolvedDeclaration) {
-                        // add our callback arguments
-                        resolvedDeclaration.callbacks =
-                            resolvedCallbackArguments;
-                        // add our call to our current definition
-                        currentDefinition.calls.push({
-                            callExpression,
-                            functionDefinition: resolvedDeclaration,
-                        });
-                        // we're done
-                        break;
+                        // we have a call
+                        definitionCall = resolvedDeclaration;
                     }
                     // errors should have already been reported
                     // else, if we were passed callbacks
-                    if (resolvedCallbackArguments.length) {
+                    else if (resolvedCallbackArguments.length) {
                         // create a synthetic function for this call expression
-                        const key = createDefinitionKey(callExpression);
+                        const key = createNodeKey(callExpression);
                         this.syntheticDefinitions[key] = {
+                            type: ParsedDefinitionType.SYNTHETIC,
                             id: uuidv4(),
                             key,
                             nodes: [callExpression],
-                            callbacks: resolvedCallbackArguments,
                         };
-                        // add our synthetic definition as a call to our current definition
-                        currentDefinition.calls.push({
+                        // our call is our synthetic definition
+                        definitionCall = this.syntheticDefinitions[key];
+                    }
+                    // if we have any sort of definition call
+                    if (definitionCall) {
+                        // add our call to our context block
+                        const call = {
+                            id: uuidv4(),
+                            key: createNodeKey(callExpression),
+                            type: ParsedNodeType.CALL_EXPRESSION,
                             callExpression,
-                            functionDefinition: this.syntheticDefinitions[key],
-                        });
+                            functionDefinition: definitionCall,
+                            callbacks: resolvedCallbackArguments,
+                            parentNode: context.block ?? undefined,
+                        };
+                        context.block?.parsedNodes.push(call);
+                        context.calls.push(call);
                     }
                     // we're done
                     break;
@@ -599,6 +675,12 @@ class Program {
                     }
                     break;
                 }
+                case ts.SyntaxKind.Block: {
+                    // update our current block
+                    currentBlockNode = node as ts.Block;
+                    // that's all
+                    break;
+                }
                 case ts.SyntaxKind.ExportKeyword: {
                     // get definitions for this export
                     const exportedDefinitions = this.resolveExportKeyword(
@@ -613,10 +695,135 @@ class Program {
                 }
             }
 
-            node.forEachChild(it =>
-                parseNode.call(this, it, currentDefinition)
-            );
-        }.call(this, sourceFile));
+            // dermine what our current block is
+            let currentContextBlock = context.block;
+            // if we are a block AND
+            // if we are NOT the block node of our current context block
+            const newBlock = currentBlockNode !== context.block?.blockNode;
+            if (currentBlockNode && newBlock) {
+                // then create a new block for ourselves
+                currentContextBlock = {
+                    id: uuidv4(),
+                    key: createNodeKey(currentBlockNode),
+                    type: ParsedNodeType.BLOCK,
+                    blockNode: currentBlockNode,
+                    parsedNodes: [],
+                    parentNode: context.block ?? undefined,
+                };
+            }
+            // track whether or not we are a definition
+            const newCurrentDefinition =
+                currentDefinition && currentDefinition != context.definition;
+
+            let currentContextDefinition: SyntheticDefinition | null = null;
+            node.forEachChild(childNode => {
+                // create context to pass to this child node
+                const childContext = {
+                    calls: [],
+                    block: newCurrentDefinition
+                        ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                          currentDefinition!.block
+                        : currentContextBlock,
+                    definition: currentDefinition,
+                };
+                // parse the child node
+                parseNode.call(this, childNode, childContext);
+
+                // if we don't have a current definition
+                if (!currentDefinition) {
+                    // then there is nothing more to do
+                    return;
+                }
+
+                // if we aren't a new definition and our child node had calls
+                if (!newCurrentDefinition && childContext.calls.length) {
+                    // then pass them up
+                    context.calls = [...context.calls, ...childContext.calls];
+                }
+
+                // if we aren't a block
+                if (!currentBlockNode) {
+                    // nothing more to do
+                    return;
+                }
+
+                // else, we are a block node
+                // if this child node had calls
+                if (childContext.calls.length) {
+                    // then this node will not be included in our context definition
+                    // end our current context definition
+                    if (currentContextDefinition) {
+                        currentContextDefinition = null;
+                    }
+                    // there is nothing more to do
+                    return;
+                }
+                // else, this node is a part of our current context definition
+                // if we don't have a current context definition
+                if (!currentContextDefinition) {
+                    // create one
+                    const key = createNodeKey(childNode);
+                    const callExpression = ts.factory.createCallExpression(
+                        ts.factory.createIdentifier(
+                            childNode.getText().substring(0, 20)
+                        ),
+                        undefined,
+                        undefined
+                    );
+                    this.syntheticDefinitions[key] = {
+                        type: ParsedDefinitionType.SYNTHETIC,
+                        id: uuidv4(),
+                        key,
+                        nodes: [],
+                    };
+                    currentContextBlock?.parsedNodes.push({
+                        id: uuidv4(),
+                        key: createNodeKey(childNode),
+                        type: ParsedNodeType.CALL_EXPRESSION,
+                        callExpression,
+                        functionDefinition: this.syntheticDefinitions[key],
+                        callbacks: [],
+                        parentNode: currentContextBlock,
+                    });
+                    currentContextDefinition = this.syntheticDefinitions[key];
+                }
+                // by now, we'll have a current context definition
+                // add our child node to it
+                currentContextDefinition.nodes.push(childNode);
+            });
+
+            // if we are a block
+            if (currentBlockNode) {
+                // we may have ended up with only a single node
+                if (currentContextBlock?.parsedNodes.length === 1) {
+                    const singleNode = currentContextBlock.parsedNodes[0];
+                    // if this single node was a synthetic definition OR
+                    // an empty block
+                    if (
+                        (singleNode.type === ParsedNodeType.CALL_EXPRESSION &&
+                            (singleNode as ParsedCallExpression)
+                                .functionDefinition.type ===
+                                ParsedDefinitionType.SYNTHETIC) ||
+                        (singleNode.type === ParsedNodeType.BLOCK &&
+                            (singleNode as ParsedBlock).parsedNodes.length ===
+                                0)
+                    ) {
+                        // then remove the single context definition from our current block
+                        currentContextBlock.parsedNodes.pop();
+                    }
+                }
+                // now, if we still have nodes in our block AND
+                // we're a new block
+                if (newBlock && currentContextBlock?.parsedNodes.length) {
+                    // add our block to our context
+                    context.block?.parsedNodes.push(currentContextBlock);
+                }
+            }
+        }.call(this, sourceFile, {
+            definition: null,
+            block: null,
+            calls: [],
+        }));
 
         // done parsing
         this.sourceFiles[sourceFile.fileName].status = PARSE_STATUS.PARSED;

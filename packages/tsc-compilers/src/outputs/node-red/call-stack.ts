@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 import { CompiledDefinitions, DeclaredDefinition } from '../../lib/compiler';
+import { getBlockCalls } from '../../lib/node-red';
 
 export default (
     functionDefinitions: CompiledDefinitions,
@@ -26,7 +27,7 @@ export default (
             Object.entries(functionDefinitions).filter(
                 ([_, it]) => 'definition' in it
             ) as [string, DeclaredDefinition][]
-        ).map(([_, { id, declaration, definition, calls }]) => ({
+        ).map(([_, { id, declaration, definition, block }]) => ({
             id,
             type: 'function',
             z: flowId,
@@ -39,7 +40,7 @@ export default (
             libs: [],
             x: 160,
             y: (yPos += 50),
-            wires: [calls.map(it => it.functionDefinition.id)],
+            wires: [getBlockCalls(block).map(it => it.id)],
         })),
     ];
     // output flow
