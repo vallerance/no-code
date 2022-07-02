@@ -153,3 +153,11 @@ export const createLayoutGraph = (
     dagre.layout(graph);
     return graph;
 };
+
+export const randomAddress = (): string => uuidv4().split('-')[0];
+
+export const getDeclarationName = (declaration: ts.NamedDeclaration): string =>
+    declaration.name?.getText() ?? '[[Anonymous function]] ' + randomAddress();
+
+export const getDefaultNodeName = (node: ts.Node): string =>
+    node?.getText().substring(0, 50) ?? '[[Empty]] ' + randomAddress();
