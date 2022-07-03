@@ -39,7 +39,7 @@ export default (
     };
 
     function outputDefinition(
-        { parent }: FlowParams,
+        { name: definitionName, parent }: FlowParams,
         definition: DeclaredDefinition
     ): string {
         // index nodes as we loop them
@@ -112,7 +112,7 @@ export default (
         flowNodes.push({
             id: subflowId,
             type: 'subflow',
-            name: getDeclarationName(definition.declaration),
+            name: definitionName,
             info: '',
             in: [
                 {
@@ -255,7 +255,10 @@ export default (
                                   outputDefinition(
                                       {
                                           name: base.name,
-                                          parent: { name, parent },
+                                          parent: {
+                                              name: definitionName,
+                                              parent,
+                                          },
                                       },
                                       (node as ParsedCallExpression)
                                           .functionDefinition as DeclaredDefinition
@@ -290,7 +293,9 @@ export default (
         if (it.type === ParsedDefinitionType.DECLARED) {
             outputDefinition(
                 {
-                    name,
+                    name: getDeclarationName(
+                        (it as DeclaredDefinition).declaration
+                    ),
                     parent: { name: '[[Root]]', parent: null },
                 },
                 it as DeclaredDefinition
