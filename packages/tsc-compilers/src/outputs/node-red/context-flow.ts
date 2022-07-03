@@ -32,6 +32,7 @@ export default (
     name: string
 ) => {
     const flowNodes: Record<string, unknown>[] = [];
+    const subflows: Record<string, string> = {};
 
     type FlowParams = {
         name: string;
@@ -42,6 +43,11 @@ export default (
         { name: definitionName, parent }: FlowParams,
         definition: DeclaredDefinition
     ): string {
+        // if we have already created a subflow for this definition
+        if (subflows[definition.id]) {
+            // don't create a duplicate, just re-use the one we have
+            return subflows[definition.id];
+        }
         // index nodes as we loop them
         const nodesByKey: Record<string, ParsedNode> = {};
         // Create a new directed graph
@@ -108,6 +114,8 @@ export default (
 
         // create flow id
         const subflowId = uuidv4();
+        // track our subflow
+        subflows[definition.id] = subflowId;
         // create flow
         flowNodes.push({
             id: subflowId,
