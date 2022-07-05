@@ -16,11 +16,15 @@ import {
 } from '../../lib/compiler';
 import {
     calculatePosition,
+    FlowNodeInfo,
     getBlockCalls,
     getDeclarationName,
     getDefaultNodeName,
+    getFlowFilename,
+    getFlowInfoKey,
     getNodeDimensions,
     NODE_DIMENSIONS,
+    TsNodeInfo,
 } from '../../lib/node-red';
 import { createNodeKey, forceAddNodeToFile } from '../../lib/source-file';
 
@@ -33,6 +37,25 @@ export default (
 ) => {
     const flowNodes: Record<string, unknown>[] = [];
     const subflows: Record<string, string> = {};
+    // store node info in flow
+    const nodeInfo: Record<string, FlowNodeInfo> = {};
+    const flowKey = uuidv4();
+    flowNodes.push(
+        {
+            id: flowKey,
+            type: 'tab',
+            label: name,
+        },
+        {
+            id: getFlowInfoKey(),
+            type: 'comment',
+            name: 'nodeInfo',
+            x: 200,
+            y: 200,
+            z: flowKey,
+            info: nodeInfo,
+        }
+    );
 
     type FlowParams = {
         name: string;
@@ -138,7 +161,13 @@ export default (
                     })),
                 },
             ],
-            out: [],
+            out: [
+                {
+                    x: 160,
+                    y: 30,
+                    wires: [],
+                },
+            ],
         });
 
         graph
@@ -162,16 +191,21 @@ export default (
                         block: ParsedBlock;
                         calls: ParsedCallExpression[];
                         callbackParentKey: string | null;
+                        tsNodeInfo: TsNodeInfo;
                     };
                     if (node.type === ParsedNodeType.BLOCK) {
+                        const { blockNode } = node as ParsedBlock;
                         nodeParams = {
-                            name: getDefaultNodeName(
-                                (node as ParsedBlock).blockNode.parent
-                            ),
+                            name: getDefaultNodeName(blockNode.parent),
                             text: '',
                             block: node as ParsedBlock,
                             calls: [],
                             callbackParentKey: null,
+                            tsNodeInfo: {
+                                end: blockNode.end,
+                                pos: blockNode.pos,
+                                fileName: blockNode.getSourceFile().fileName,
+                            },
                         };
                     } else if (
                         (node as ParsedCallExpression).functionDefinition
@@ -185,6 +219,8 @@ export default (
                         } = (node as ParsedCallExpression)
                             .functionDefinition as DeclaredDefinition;
                         const parentNode = nodesByKey[parentKey];
+                        const callExpression = (node as ParsedCallExpression)
+                            .callExpression;
                         nodeParams = {
                             name: getDeclarationName(declaration),
                             text: definition.getText(),
@@ -198,6 +234,12 @@ export default (
                                 ).callbacks.find(it => it.id === definitionId)
                                     ? parentKey
                                     : null,
+                            tsNodeInfo: {
+                                end: callExpression.end,
+                                pos: callExpression.pos,
+                                fileName:
+                                    callExpression.getSourceFile().fileName,
+                            },
                         };
                     } else {
                         const { nodes } = (node as ParsedCallExpression)
@@ -214,6 +256,11 @@ export default (
                             },
                             calls: [],
                             callbackParentKey: null,
+                            tsNodeInfo: {
+                                pos: nodes[0].pos,
+                                end: nodes.slice(-1)[0].end,
+                                fileName: nodes[0].getSourceFile().fileName,
+                            },
                         };
                     }
                     const { name, text, calls, callbackParentKey } = nodeParams;
@@ -290,17 +337,29 @@ export default (
                               outputs: 1,
                               noerr: 0,
                               initialize:
-                                  node.type === ParsedNodeType.CALL_EXPRESSION
+                                  node.type ===
+                                      ParsedNodeType.CALL_EXPRESSION &&
+                                  (node as ParsedCallExpression)
+                                      .functionDefinition.type ===
+                                      ParsedDefinitionType.DECLARED
                                       ? (
                                             node as ParsedCallExpression
-                                        ).callExpression.arguments
-                                            .map(it => getDefaultNodeName(it))
-                                            .join(', ')
+                                        ).callExpression.getText()
                                       : '',
                               finalize: '',
                               libs: [],
                           };
                     flowNodes.push(flowNode);
+                    nodeInfo[flowNode.id] = {
+                        flowNode: {
+                            id: flowNode.id,
+                            name: flowNode.name,
+                            type: flowNode.type,
+                            wires: flowNode.wires,
+                            initialize: flowNode.initialize,
+                        },
+                        tsNodeInfo: nodeParams.tsNodeInfo,
+                    };
                     return flowNode;
                 })(key)
             );
@@ -324,7 +383,7 @@ export default (
 
     // output flow
     fs.writeFileSync(
-        `${directory}/${name}.json`,
+        getFlowFilename(directory, name),
         JSON.stringify(flowNodes, undefined, 2)
     );
 };

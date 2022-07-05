@@ -1,7 +1,24 @@
 import * as path from 'path';
+import { Project } from 'ts-morph';
 import * as ts from 'typescript';
 
 import { AliasConfig, prepareConfig } from './tsc-alias/config';
+
+const findConfigFile = (configDir: string, configName: string): string => {
+    const configFilePath = ts.findConfigFile(
+        configDir,
+        ts.sys.fileExists,
+        configName
+    );
+
+    if (!configFilePath) {
+        throw new Error(
+            `Unable to find config file: ${configName} from path: ${configDir}`
+        );
+    }
+
+    return configFilePath;
+};
 
 export type ProgramSpec = {
     compilerHost: ts.CompilerHost;
@@ -14,18 +31,7 @@ export const createProgram = (
     argv: string[],
     configName: string
 ): ProgramSpec => {
-    const configFilePath = ts.findConfigFile(
-        argv[0],
-        ts.sys.fileExists,
-        configName
-    );
-
-    if (!configFilePath) {
-        throw new Error(
-            `Unable to find config file: ${configName} from path: ${argv[0]}`
-        );
-    }
-
+    const configFilePath = findConfigFile(argv[0], configName);
     console.log(`Found config file: ${configFilePath}`);
 
     const configFile = ts.readConfigFile(configFilePath, ts.sys.readFile);
@@ -48,4 +54,18 @@ export const createProgram = (
     );
 
     return { tsConfig: parsedConfig, program, compilerHost: host, aliasConfig };
+};
+
+export const createMorphProject = (
+    argv: string[],
+    configName: string
+): Project => {
+    const configFilePath = findConfigFile(argv[0], configName);
+    console.log(`Found config file: ${configFilePath}`);
+
+    const project = new Project({
+        tsConfigFilePath: configFilePath,
+    });
+
+    return project;
 };

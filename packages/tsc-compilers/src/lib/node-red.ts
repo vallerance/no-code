@@ -13,6 +13,41 @@ import {
 } from './compiler';
 import { createNodeKey } from './source-file';
 
+export enum FlowNodeType {
+    FUNCTION = 'function',
+    INPUT = 'input',
+    OUTPUT = 'output',
+    SUBFLOW = 'subflow',
+}
+
+// type Difference = ReturnType<typeof microdiff>[number];
+
+export type FlowNode = {
+    id: string;
+    name: string;
+    type: FlowNodeType | string;
+    wires: string[][];
+    initialize: string;
+};
+
+export type TsNodeInfo = {
+    fileName: string;
+    pos: number;
+    end: number;
+};
+
+export type FlowNodeInfo = {
+    flowNode: FlowNode;
+    tsNodeInfo: TsNodeInfo;
+};
+
+export const getFlowFilename = (directory: string, name: string): string =>
+    `${directory}/${name}.json`;
+
+const FLOW_INFO_KEY = 'flow-info-48978d9a8f7d9a87';
+
+export const getFlowInfoKey = () => FLOW_INFO_KEY;
+
 export const NODE_DIMENSIONS = {
     width: 200,
     height: 250,
