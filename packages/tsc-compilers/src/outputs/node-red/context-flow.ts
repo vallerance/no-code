@@ -22,7 +22,7 @@ import {
     getNodeDimensions,
     NODE_DIMENSIONS,
 } from '../../lib/node-red';
-import { createNodeKey } from '../../lib/source-file';
+import { createNodeKey, forceAddNodeToFile } from '../../lib/source-file';
 
 const INPUT_KEY = 'INPUT_4823958';
 
@@ -82,19 +82,25 @@ export default (
                     // process callbacks
                     (node as ParsedCallExpression).callbacks.forEach(
                         callback => {
-                            const callbackKey = callback.id;
-                            nodesByKey[callbackKey] = {
-                                id: uuidv4(),
-                                key: createNodeKey(callback.definition),
-                                type: ParsedNodeType.CALL_EXPRESSION,
-                                functionDefinition: callback,
-                                callExpression: ts.factory.createCallExpression(
+                            const callbackKey = uuidv4();
+                            const callExpression =
+                                ts.factory.createCallExpression(
                                     ts.factory.createParenthesizedExpression(
                                         callback.definition as CallableDefinition
                                     ),
                                     undefined,
                                     undefined
-                                ),
+                                );
+                            forceAddNodeToFile(
+                                callExpression,
+                                callback.definition
+                            );
+                            nodesByKey[callbackKey] = {
+                                id: callbackKey,
+                                key: createNodeKey(callback.definition),
+                                type: ParsedNodeType.CALL_EXPRESSION,
+                                functionDefinition: callback,
+                                callExpression,
                                 callbacks: [],
                             };
                             graph.setNode(callbackKey, { ...NODE_DIMENSIONS });
@@ -171,9 +177,13 @@ export default (
                         (node as ParsedCallExpression).functionDefinition
                             .type === ParsedDefinitionType.DECLARED
                     ) {
-                        const { declaration, definition, block } = (
-                            node as ParsedCallExpression
-                        ).functionDefinition as DeclaredDefinition;
+                        const {
+                            id: definitionId,
+                            declaration,
+                            definition,
+                            block,
+                        } = (node as ParsedCallExpression)
+                            .functionDefinition as DeclaredDefinition;
                         const parentNode = nodesByKey[parentKey];
                         nodeParams = {
                             name: getDeclarationName(declaration),
@@ -185,7 +195,7 @@ export default (
                                     ParsedNodeType.CALL_EXPRESSION &&
                                 (
                                     parentNode as ParsedCallExpression
-                                ).callbacks.find(it => it.id === key)
+                                ).callbacks.find(it => it.id === definitionId)
                                     ? parentKey
                                     : null,
                         };

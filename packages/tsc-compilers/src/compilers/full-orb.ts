@@ -17,7 +17,7 @@ import {
 } from '../lib/compiler';
 import { report } from '../lib/log';
 import { mapModuleToSourceFile } from '../lib/module';
-import { createNodeKey } from '../lib/source-file';
+import { createNodeKey, forceAddNodeToFile } from '../lib/source-file';
 import * as outputs from '../outputs';
 
 const getCallExpressionIdentifier = (
@@ -214,19 +214,11 @@ class Program {
         // if it is an expression
         if (body.kind !== ts.SyntaxKind.Block) {
             // convert it into a block
-            const { pos, end, parent } = body;
+            const existingBody = body;
             body = ts.factory.createBlock([
                 ts.factory.createReturnStatement(body),
             ]);
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            //@ts-ignore
-            body.pos = pos;
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            //@ts-ignore
-            body.end = end;
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            //@ts-ignore
-            body.parent = parent;
+            forceAddNodeToFile(body, existingBody);
         }
         // by now, body should be a block
         return body as ts.Block;
