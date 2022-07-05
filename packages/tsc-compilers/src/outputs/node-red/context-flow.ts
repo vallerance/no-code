@@ -134,7 +134,7 @@ export default (
                     wires: (
                         graph.successors(INPUT_KEY) as unknown as string[]
                     ).map(it => ({
-                        id: it + '-' + subflowId,
+                        id: it,
                     })),
                 },
             ],
@@ -147,7 +147,7 @@ export default (
             .forEach(key =>
                 (function outputNode(key: string) {
                     // if we've already been output
-                    if (flowNodes.find(it => it.id === key + '-' + subflowId)) {
+                    if (flowNodes.find(it => it.id === key)) {
                         // then there is nothing more to do
                         return;
                     }
@@ -230,7 +230,7 @@ export default (
                         outputNode(callbackParentKey);
                         // get our parent's position
                         const parentPosition = flowNodes.find(
-                            it => it.id === callbackParentKey + '-' + subflowId
+                            it => it.id === callbackParentKey
                         ) as { x: number; y: number };
                         // base our position off our parent's
                         position = {
@@ -248,7 +248,7 @@ export default (
                         outputNode(parentKey);
                         // get our parent's position
                         const parentPosition = flowNodes.find(
-                            it => it.id === parentKey + '-' + subflowId
+                            it => it.id === parentKey
                         ) as { x: number; y: number };
                         // base our position off our parent's
                         position = {
@@ -258,11 +258,12 @@ export default (
                     }
 
                     const base = {
-                        id: key + '-' + subflowId,
+                        id: key,
                         z: subflowId,
                         name,
                         ...position,
-                        wires: [successors.map(it => it + '-' + subflowId)],
+                        wires: [successors],
+                        initialize: '',
                     };
 
                     const flowNode = calls.length
