@@ -216,6 +216,69 @@ export class BrowserStats {
                     browsers.addFeature(i, feature);
                 }
 
+                browsers.addFeature('aspect-ratio', {
+                    title: 'Aspect-ratio: text',
+                    description: 'Sets a preferred aspect ratio for the box.',
+                    categories: ['CSS'],
+                    stats: {
+                        firefox: {
+                            '78': 'n',
+                            '79': 'n',
+                            '80': 'n',
+                            '81': 'n',
+                            '82': 'n',
+                            '83': 'n',
+                            '84': 'n',
+                            '85': 'n',
+                            '86': 'n',
+                            '87': 'n',
+                            '88': 'n',
+                            '89': 'y',
+                            '3.5': 'n',
+                            '3.6': 'n',
+                        },
+                        chrome: {
+                            '85': 'n x',
+                            '86': 'n x',
+                            '87': 'n x',
+                            '88': 'y x',
+                            '89': 'y x',
+                            '90': 'y x',
+                            '91': 'y x',
+                            '92': 'y x',
+                            '93': 'y x',
+                        },
+                        safari: {
+                            '11.1': 'n x',
+                            '12.1': 'n x',
+                            '13.1': 'n x',
+                            TP: 'y x',
+                        },
+                        ios_saf: {
+                            '11.0-11.2': 'n x',
+                            '11.3-11.4': 'n x',
+                            '12.0-12.1': 'n x',
+                            '12.2-12.4': 'n x',
+                            '13.0-13.1': 'n x',
+                            '13.2': 'n x',
+                            '13.3': 'n x',
+                            '13.4-13.7': 'n x',
+                            '14.0-14.5': 'y x',
+                        },
+                        and_chr: {
+                            '89': 'y x',
+                        },
+                        and_ff: {
+                            '86': 'y',
+                        },
+                    },
+                    usage_perc_y: 76.45,
+                    usage_perc_a: 0,
+                    ucprefix: false,
+                    parent: 'css',
+                    keywords: 'aspect-ratio',
+                });
+
                 return browsers;
             });
     }
